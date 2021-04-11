@@ -1,0 +1,42 @@
+version: '2.2'
+services:
+
+  miner:
+    image: docker.io/spacemeshos/go-spacemesh:v0.1.29
+    container_name: miner
+    restart: unless-stopped
+    labels:
+      - kind=tweedlelite
+    volumes:
+      - vol:/root/spacemesh
+      - ./config.json:/config.json:ro
+    entrypoint: ["/bin/go-spacemesh"]
+    command: ["--config=/config.json",
+              "--coinbase=${COINBASE}",
+              "--tcp-port=7500",
+              "--json-server",
+              "--json-port=9000",
+              "--test-mode"
+              ]
+    expose:
+      - 7500/tcp
+      - 7500/udp
+      - 9000/tcp
+    ports:
+      - 0.0.0.0:7500:7500/tcp
+      - 0.0.0.0:7500:7500/udp
+    networks:
+      - cloud/miner
+
+networks:
+  cloud/miner:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${NETWORK_PREFIX}.0/28
+          gateway: ${NETWORK_PREFIX}.1
+          aux_addresses:
+            miner: ${NETWORK_PREFIX}.2
+volumes:
+  vol:
