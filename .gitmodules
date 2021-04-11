@@ -1,0 +1,22 @@
+[submodule "errstr"]
+	path = virtual/errstr
+	url = git@github.com:sudachen/errstr
+[submodule "go-spacemesh"]
+	path = virtual/go-spacemesh
+	url = git@github.com:spacemeshos/go-spacemesh
+[submodule "ed25519"]
+	path = virtual/ed25519
+	url = git@github.com:spacemeshos/ed25519
+	branch = vrf
+[submodule "fixed"]
+	path = virtual/fixed
+	url = git@github.com:spacemeshos/fixed
+[submodule "poet"]
+	path = virtual/poet
+	url = git@github.com:spacemeshos/poet
+[submodule "benchmark"]
+	path = virtual/pptk/benchmark
+	url = git@github.com:sudachen/benchmark
+[submodule "api"]
+	path = virtual/api
+	url = git@github.com:spacemeshos/api
