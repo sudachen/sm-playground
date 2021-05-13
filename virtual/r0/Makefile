@@ -10,7 +10,7 @@ docker-build-miner:
 	docker tag go-spacemesh:${VERSION} local/go-spacemesh:latest
 
 docker-build-poet:
-	cd ../../poet && docker build -t poet:${VERSION} .
+	cd ../poet && docker build -t poet:${VERSION} .
 	docker tag poet:${VERSION} local/poet:latest
 
 build-miner: $(BIN_DIR)/$(BINARY)

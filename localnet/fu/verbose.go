@@ -1,6 +1,6 @@
 package fu
 
-import "github.com/sudachen/smwlt/fu/stdio"
+import "sudachen.xyz/pkg/localnet/stdio"
 
 var VerboseOpt = false
 var VerboseOptP *bool = &VerboseOpt

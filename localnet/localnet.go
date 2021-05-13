@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sudachen.xyz/pkg/localnet/fu"
+	"time"
 )
 
 const RoleLabel = "spacemesh/role"
@@ -17,6 +18,7 @@ const PoetRole = "poet"
 const MinerRole = "miner"
 
 const NetworkID = 1
+const BootnodesCount = 1
 
 // EnvDockerLabel is the environment variable name
 const EnvDockerLabel = "LOCALNET_LABEL"
@@ -36,7 +38,7 @@ const DefaultPoetDockerImage = "local/poet:latest"
 // EnvNodesCount is the environment variable name
 const EnvNodesCount = "LOCALNET_NODES_COUNT"
 // DefaultNodesCount is the default clients to start on the local test network
-const DefaultNodesCount = 8
+const DefaultNodesCount = 12
 
 // EnvNetworkNamee is the environment variable name
 const EnvNetworkName = "LOCALNET_NETWORK_NAME"
@@ -46,7 +48,7 @@ const DefaultNetworkName = "spacemesh/localnet"
 // EnvDebug is the environment variable name
 const EnvDebug = "LOCALNET_DEBUG"
 // DefaultDebug defines default sets of services
-var DefaultDebug = []string{"poet", "post", "hare", "blockBuilder", "atxBuilder"}
+var DefaultDebug = []string{"poet", "post", "hare", "block-builder", "atx-builder", "block-oracle", "hare-oracle", "sync", "trtl", "meshDb"}
 
 // EnvClientGrpc is the environment variable name
 const EnvClientGrpc = "LOCALNET_CLIENT_GRPC"
@@ -82,12 +84,12 @@ const DefaultNetworkSubnet = "192.168.88."
 const EnvMasterNodeIP = "LOCALNET_GATE_IP"
 
 // DefaultMasterNodeIP defines gate node host IP in network subnet
-const DefaultMasterNodeIP = "100"
+const DefaultMasterNodeIP = "1"
 
 // EnvPoetNodeIP is the environment variable name
 const EnvPoetNodeIP = "LOCALNET_POET_IP"
 // DefaultPoetNodeIP defines poet node host IP in network subnet
-const DefaultPoetNodeIP = "101"
+const DefaultPoetNodeIP = "253"
 
 // EnvForcePull is the environment variable name
 const EnvForcePull = "LOCALNET_FORCE_PULL"
@@ -99,22 +101,24 @@ const EnvCoinbase = "LOCALNET_COINBASE"
 // DefaultCoinbase defines list of coinbase sparated by ':'. It's used by miners.
 var DefaultCoinbase = []string{"b8110cfeB1f01011E118BdB93F1Bb14D2052c276"}
 
-const EnvComplexity = "LOCALNET_COMPLEXITY"
-const DefaultComplexity = 8
+const EnvDifficulty = "LOCALNET_DIFFICULTY"
+const DefaultDifficulty = 5
 const EnvMiningSpace = "LOCALNET_MINING_SPACE"
-const DefaultMiningSpace = 1024 //*1024
+const DefaultMiningSpace = PostUnitSize*128
 const EnvLayersPerEpoch = "LOCALNET_LAYER_PER_EPOCH"
-const DefaultLayersPerEpoch = 2
+const DefaultLayersPerEpoch = 3
 const EnvLayerDuration = "LOCALNET_LAYER_DURATION"
-const DefaultLayerDuration = 50
-const EnvHareDuration = "LOCALNET_HARE_DURATION"
-const DefaultHareDuration = 20
+const DefaultLayerDuration = 240 // sec  => 4 min
 const EnvHareLimit = "LOCALNET_HARE_LIMIT"
-const DefaultHareLimit = 12
+const DefaultHareLimit = 2 // maximum full consensus runs
 const EnvCommite = "LOCALNET_COMMITE"
 const DefaultCommite = 800
 const EnvLeaders = "LOCALNET_LEADERS" // percent of nodes
-const DefaultLeaders = 10
+const DefaultLeaders = 3
+
+const P2pAlfa = 5
+const P2pRandCon = 4
+const PostUnitSize = 1024
 
 func lookupInt(envVar string, dflt int) int {
 	if v, ok := os.LookupEnv(envVar); ok {
@@ -156,55 +160,52 @@ type Localnet struct {
 	PoetImage  string
 	PullImages bool
 
-	Count 		int
+	Count int
 
 	Json, Grpc, P2p, Poet int
-	Services []string
+	Services              []string
 
 	MiningSpace    int
 	LayersPerEpoch int
 	LayerDuration  int
-	HareDuration   int
 	HareLimit      int
-	Complexity     int
+	Difficulty     int
 	Commite        int
-	Leaders        int
+	ExpLeaders     int
 
-	MinerLabels map[string]string
-	PoetLabels map[string]string
+	MinerLabels   map[string]string
+	PoetLabels    map[string]string
 	NetworkLabels map[string]string
 
 	DockerLabel string
 
-	NetworkName string
-	Subnet string
-	Gateway string
-	PoetIP  string
-	MasterIP  string
+	NetworkName  string
+
+	SubnetPrefix string
+	PoetIPsfx   string
+	MasterIPsfx string
 
 	docker *client.Client
 	ctx    context.Context
 
-	Coinbase []string
+	Coinbase  []string
 	ClientCmd []string
 
 	Debug []string
 
-	P2pRandcon int
-	P2pAlpha int
+	genesis     time.Time
+	ids map[int]string
 
-	bootstrapId   string
-	genesis  string
 }
 
 func New() (l *Localnet) {
-	l = &Localnet{}
+	l = &Localnet{ids:map[int]string{}}
 
 	l.MinerImage = lookupString(EnvClientDockerImage,DefaultClientDockerImage)
 	l.PoetImage = lookupString(EnvClientPoetImage,DefaultPoetDockerImage)
 	l.PullImages = lookupBool(EnvForcePull,DefaultForcePull)
 
-	l.Count = lookupInt(EnvNodesCount,DefaultNodesCount)
+	l.Count = fu.Maxi(3, lookupInt(EnvNodesCount,DefaultNodesCount) )
 
 	l.Services = lookupStringArray(EnvClientGrpc,DefaultClientGrpc)
 
@@ -227,33 +228,48 @@ func New() (l *Localnet) {
 		"kind": "spacemesh", // for external analytics/logging
 	}
 
-	l.Complexity = lookupInt(EnvComplexity,DefaultComplexity)
+	l.Difficulty = lookupInt(EnvDifficulty, DefaultDifficulty)
 
 	l.NetworkLabels = map[string]string{
 		l.DockerLabel: "true",
 	}
 
 	l.NetworkName = lookupString(EnvNetworkName,DefaultNetworkName)
-	subnetPrefix := lookupString(EnvNetworkSubnet,DefaultNetworkSubnet)
-	l.Subnet = subnetPrefix + "0/24"
-	l.Gateway = subnetPrefix + "1"
-	l.PoetIP = subnetPrefix + lookupString(EnvPoetNodeIP,DefaultPoetNodeIP)
-	l.MasterIP = subnetPrefix + lookupString(EnvMasterNodeIP,DefaultMasterNodeIP)
+	l.SubnetPrefix = lookupString(EnvNetworkSubnet,DefaultNetworkSubnet)
+	l.PoetIPsfx = lookupString(EnvPoetNodeIP,DefaultPoetNodeIP)
+	l.MasterIPsfx = lookupString(EnvMasterNodeIP,DefaultMasterNodeIP)
 
 	l.Coinbase = lookupStringArray(EnvCoinbase,DefaultCoinbase)
 	l.Debug = lookupStringArray(EnvDebug,DefaultDebug)
 
-	l.P2pRandcon = fu.Maxi(3,l.Count/10)
-	l.P2pAlpha = 3
-
-	l.MiningSpace = lookupInt(EnvMiningSpace, DefaultMiningSpace)
+	l.ExpLeaders = lookupInt(EnvLeaders, DefaultLeaders)
+	l.MiningSpace = fu.Maxi((lookupInt(EnvMiningSpace, DefaultMiningSpace)+ (PostUnitSize-1))/PostUnitSize*PostUnitSize, PostUnitSize)
 	l.LayersPerEpoch = lookupInt(EnvLayersPerEpoch, DefaultLayersPerEpoch)
 	l.LayerDuration = lookupInt(EnvLayerDuration, DefaultLayerDuration)
-	l.HareDuration = lookupInt(EnvHareDuration, DefaultHareDuration)
 	l.HareLimit = lookupInt(EnvHareLimit, DefaultHareLimit)
 	l.Commite = lookupInt(EnvCommite, DefaultCommite)
-	l.Leaders = lookupInt(EnvLeaders, DefaultLeaders) * l.Commite / 100
+
 	return
+}
+
+func (l *Localnet) PoetIP() string {
+	return l.SubnetPrefix + l.PoetIPsfx
+}
+
+func (l *Localnet) MasterIP() string {
+	return l.SubnetPrefix + l.MasterIPsfx
+}
+
+func (l *Localnet) Subnet() string {
+	return l.SubnetPrefix + "0/24"
+}
+
+func (l *Localnet) Gateway() string {
+	return l.SubnetPrefix + "254"
+}
+
+func (l *Localnet) Leaders() int {
+	return  l.ExpLeaders * l.Commite / l.Count
 }
 
 func (l *Localnet) started() (ok bool,err error) {

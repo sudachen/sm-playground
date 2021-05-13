@@ -50,11 +50,8 @@ func (l *Localnet) Start() (err error) {
 	if err = l.stopAll(); err != nil {
 		return
 	}
-	delay := 10+l.HareDuration
-	l.genesis = time.Now().Add(time.Duration(delay)*time.Second).Format(time.RFC3339)
-	if err = l.startPoet(delay); err != nil {
-		return
-	}
+
+	l.genesis = time.Now().Add(10 * time.Second)
 	if err = l.writeMinerConfig(); err != nil {
 		return
 	}
@@ -62,6 +59,9 @@ func (l *Localnet) Start() (err error) {
 		return
 	}
 	if err = l.waitForMinerJson(); err != nil { return }
+	if err = l.startPoet(l.genesis); err != nil {
+		return
+	}
 	if err = l.activatePoet(); err != nil {
 		return
 	}

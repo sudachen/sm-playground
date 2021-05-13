@@ -20,3 +20,6 @@
 [submodule "api"]
 	path = virtual/api
 	url = git@github.com:spacemeshos/api
+[submodule "merkle-tree"]
+	path = virtual/poet/merkle-tree
+	url = git@github.com:spacemeshos/merkle-tree

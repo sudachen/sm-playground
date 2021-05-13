@@ -12,17 +12,22 @@ import (
 	"net/http"
 	"sudachen.xyz/pkg/errstr"
 	"sudachen.xyz/pkg/localnet/fu"
+	"time"
 )
 
-func (l *Localnet) startPoet(delay int) (err error) {
+func (l *Localnet) startPoet(genesis time.Time) (err error) {
 
 	b := bytes.Buffer{}
 	b.WriteString("jsonlog = 1\n")
-	b.WriteString(fmt.Sprintf("restlisten = %s:%d\n",l.PoetIP,l.Poet))
+	b.WriteString(fmt.Sprintf("restlisten = %s:%d\n",l.PoetIP(),l.Poet))
 	b.WriteString("[Service]\n")
-	b.WriteString(fmt.Sprintf("n = %d\n", l.Complexity))
-	b.WriteString(fmt.Sprintf("duration = %ds\n",l.LayerDuration*l.LayersPerEpoch))
-	b.WriteString(fmt.Sprintf("initialduration = %ds\n",l.LayerDuration*l.LayersPerEpoch/2+delay))
+	b.WriteString(fmt.Sprintf("n = %d\n", l.Difficulty))
+	//b.WriteString("[Core Service]\n")
+	//b.WriteString(fmt.Sprintf("n = %d\n", l.Difficulty))
+	cycle := l.LayersPerEpoch*l.LayerDuration
+	shift := cycle/3*2 + int(genesis.Sub(time.Now())/time.Second) - 1 /* container start? */
+	b.WriteString(fmt.Sprintf("duration = %ds\n",cycle))
+	b.WriteString(fmt.Sprintf("initialduration = %ds\n",shift))
 	err = ioutil.WriteFile("/tmp/spacemesh-poet-config.conf",b.Bytes(),0644)
 
 	ports := nat.PortSet{}
@@ -47,7 +52,7 @@ func (l *Localnet) startPoet(delay int) (err error) {
 				l.NetworkName : {
 					Aliases: []string{"poet"},
 					IPAMConfig: &network.EndpointIPAMConfig{
-						IPv4Address: l.PoetIP,
+						IPv4Address: l.PoetIP(),
 					},
 				},
 			},
@@ -59,34 +64,39 @@ func (l *Localnet) startPoet(delay int) (err error) {
 	}
 	err = l.docker.ContainerStart(l.ctx, body.ID, types.ContainerStartOptions{})
 	if err != nil { return }
-
-
 	return l.waitFor("spacemesh_poet")
 }
 
-func (l *Localnet) activatePoet() (err error) {
+func (l *Localnet) activatePoet() (error) {
 	fu.Verbose("Activating poet server")
 	ht := &http.Client{}
 	bs, err := json.Marshal(struct{GatewayAddresses []string `json:"gatewayAddresses"`}{
-		[]string{fmt.Sprintf("%s:%d",l.MasterIP,l.Grpc)},
+		[]string{fmt.Sprintf("%s:%d",l.MasterIP(),l.Grpc)},
 	})
-	if err != nil { return }
-	req, err := http.NewRequest("POST",
-		fmt.Sprintf("http://%s:%d/v1/start",l.PoetIP,l.Poet),
-		bytes.NewBuffer(bs))
-	if err != nil { return }
-	req.Header.Set("Content-Type", "application/json")
-	res, err := ht.Do(req)
-	if err != nil {
-		return
+	if err != nil { return err }
+	for i :=0; i < 15; i++ {
+		req, err := http.NewRequest("POST",
+			fmt.Sprintf("http://%s:%d/v1/start",l.PoetIP(),l.Poet),
+			bytes.NewBuffer(bs))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		res, err := ht.Do(req)
+		if err != nil {
+			fu.Verbose(err.Error())
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		defer res.Body.Close()
+		var r map[string]interface{}
+		err = json.NewDecoder(res.Body).Decode(&r)
+		if err != nil { return err }
+		if v, ok := r["error"]; ok {
+			err = errstr.New(v.(string))
+		}
+		return err
 	}
-	defer res.Body.Close()
-	var r map[string]interface{}
-	err = json.NewDecoder(res.Body).Decode(&r)
-	if err != nil { return }
-	if v, ok := r["error"]; ok {
-		err = errstr.New(v.(string))
-	}
-	return
+	return errstr.New("can't connect poet server")
 }
 

@@ -20,37 +20,44 @@ import (
 
 func (l *Localnet) writeMinerConfig() (err error) {
 	cfg := make(map[string]interface{})
+	tick := fu.Maxi(l.LayerDuration/7,2)
 
 	main := make(map[string]interface{})
 	main["test-mode"] = true
 	main["layers-per-epoch"] = l.LayersPerEpoch
 	main["layer-duration-sec"] = l.LayerDuration
+	main["layer-average-size"] = l.Count/2
 	main["coinbase"] = strings.Join(l.Coinbase,",")
-	main["genesis-time"] = l.genesis
+	main["genesis-time"] = l.genesis.Add(time.Duration(5)*time.Second).Format(time.RFC3339)
 	main["genesis-total-weight"] = l.Count*l.MiningSpace
-	main["hdist"] = fu.Mini(l.LayersPerEpoch,100)
-	main["poet-server"] = fmt.Sprintf("%s:%d",l.PoetIP,l.Poet)
+	main["space-to-commit"] = l.MiningSpace
+	main["hdist"] = fu.Mini(fu.Maxi(l.LayersPerEpoch/2,10),l.LayersPerEpoch*2-1)
+	main["poet-server"] = fmt.Sprintf("%s:%d",l.PoetIP(),l.Poet)
 	main["start-mining"] = true
+	main["sync-interval"] = fu.Maxi(tick*2/3,2)
+	main["sync-validation-delta"] = tick*2
 	cfg["main"] = main
 
 	hare := make(map[string]interface{})
 	hare["hare-committee-size"] = l.Commite
-	hare["hare-max-adversaries"] = l.Commite/2-1
-	hare["hare-exp-leaders"] = l.Leaders
-	hare["hare-limit-concurrent"] = fu.Maxi(3,l.LayerDuration/l.HareDuration)
+	hare["hare-max-adversaries"] = int(float64(l.Commite) * 0.4) // for small nodes count we have real commite variance about 20%
+	hare["hare-exp-leaders"] = l.Leaders()
+	hare["hare-limit-concurrent"] = 4
 	hare["hare-limit-iterations"] = l.HareLimit
-	hare["hare-wakeup-delta"] = fu.Maxi(l.HareDuration/3,5)
-	hare["hare-round-duration-sec"] = l.HareDuration
+	hareDuration := tick
+	hare["hare-wakeup-delta"] = tick*2
+	hare["hare-round-duration-sec"] = hareDuration
 	cfg["hare"] = hare
 
 	elig := make(map[string]interface{})
-	elig["eligibility-confidence-param"] = uint64(fu.Maxi(2,l.LayersPerEpoch/2))
+	// hare must terminate or fail before safe layer be used.
+	elig["eligibility-confidence-param"] = fu.Mini(l.LayersPerEpoch*2-1,10/*m*/*60/l.LayerDuration)
 	cfg["hare-eligibility"] = elig
 
 	swarm := make(map[string]interface{})
-	swarm["randcon"] = l.P2pRandcon
-	swarm["alpha"] = l.P2pAlpha
-	swarm["bucketsize"] = l.P2pRandcon
+	swarm["randcon"] = P2pRandCon
+	swarm["alpha"] = P2pAlfa
+	swarm["bucketsize"] = P2pRandCon*2
 
 	p2p := make(map[string]interface{})
 	p2p["swarm"] = swarm
@@ -67,7 +74,8 @@ func (l *Localnet) writeMinerConfig() (err error) {
 	cfg["api"] = api
 
 	post := make(map[string]interface{})
-	post["post-space"] = l.MiningSpace
+	post["post-space"] = PostUnitSize
+	post["post-difficulty"] = l.Difficulty
 	cfg["post"] = post
 
 	logx := make(map[string]interface{})
@@ -86,36 +94,35 @@ func (l *Localnet) writeMinerConfig() (err error) {
 }
 
 func (l *Localnet) startMiner(i int) (err error) {
-	fu.Verbose("Starting miner %d ...", i)
+	fu.Verbose("Starting miner %d ...", i+1)
 
 	cmd := append(l.ClientCmd, "--config=/config.json")
 
+	bnCount := fu.Mini(BootnodesCount, l.Count/2)
+
 	if i != 0 {
-		cmd = append(cmd,"--bootstrap",
-			"--bootnodes="+fmt.Sprintf("spacemesh://%s@%s:%d", l.bootstrapId, l.MasterIP, l.P2p),
+		var (
+			id string
+			nodes []string
 		)
+		for j := 0; j < i && j < bnCount; j++ {
+			if id, err = l.getId(j); err != nil {
+				return
+			}
+			nodes = append(nodes,fmt.Sprintf("spacemesh://%s@%s%d:%d", id, l.SubnetPrefix, j+1, l.P2p))
+		}
+		cmd = append(cmd,"--bootstrap","--bootnodes="+strings.Join(nodes,","))
 	}
 
-	var netcfg *network.NetworkingConfig
-	if i == 0 {
-		netcfg = &network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{
-				l.NetworkName : {
-					Aliases: []string{"miner_0"},
-					IPAMConfig: &network.EndpointIPAMConfig{
-						IPv4Address: l.MasterIP,
-					},
+	netcfg := &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			l.NetworkName : {
+				//Aliases: []string{fmt.Sprintf("miner_%d",i+1)},
+				IPAMConfig: &network.EndpointIPAMConfig{
+					IPv4Address: l.SubnetPrefix + fmt.Sprint(i+1),
 				},
 			},
-		}
-	} else {
-		netcfg = &network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{
-				l.NetworkName : {
-					Aliases: []string{fmt.Sprintf("miner_%d",i)},
-				},
-			},
-		}
+		},
 	}
 
 	ports := nat.PortSet{}
@@ -144,58 +151,60 @@ func (l *Localnet) startMiner(i int) (err error) {
 		},
 		netcfg,
 		nil,
-		fmt.Sprintf("spacemesh_miner_%d",i))
+		fmt.Sprintf("spacemesh_miner_%d",i+1))
 	if err != nil {
 		return
 	}
 	err = l.docker.ContainerStart(l.ctx, body.ID, types.ContainerStartOptions{})
 	if err != nil { return }
-	err = l.waitFor(fmt.Sprintf("spacemesh_miner_%d",i))
+	err = l.waitFor(fmt.Sprintf("spacemesh_miner_%d",i+1))
 	if err != nil { return }
+	return
+}
 
-	if i == 0 {
-		for j := 0; j < 10; j++ {
-			var rdc io.ReadCloser
-			rdc, _, err = l.docker.CopyFromContainer(l.ctx, "spacemesh_miner_0", fmt.Sprintf("/root/spacemesh/%d/p2p/nodes", NetworkID))
-			if err != nil {
-				if !strings.Contains(err.Error(),"No such") {
-					fu.Verbose("id copy failed: %v",err.Error())
-				}
-				time.Sleep(3*time.Second)
-				continue
+func (l *Localnet) getId(n int) (id string, err error) {
+	if v, ok := l.ids[n]; ok {
+		return v, nil
+	}
+	for j := 0; j < 10; j++ {
+		var rdc io.ReadCloser
+		rdc, _, err = l.docker.CopyFromContainer(l.ctx, fmt.Sprintf("spacemesh_miner_%d",n+1), fmt.Sprintf("/root/spacemesh/%d/p2p/nodes", NetworkID))
+		if err != nil {
+			if !strings.Contains(err.Error(),"No such") {
+				fu.Verbose("id copy failed: %v",err.Error())
 			}
-			defer rdc.Close()
-			tr := tar.NewReader(rdc)
-			for {
-				h, e := tr.Next()
+			time.Sleep(3*time.Second)
+			continue
+		}
+		defer rdc.Close()
+		tr := tar.NewReader(rdc)
+		for {
+			if h, e := tr.Next(); e != io.EOF {
 				if e != nil {
-					return e
+					return "", err
 				}
-				if e != io.EOF && strings.HasSuffix(h.Name, "id.json") {
+				if strings.HasSuffix(h.Name, "id.json") {
 					v := map[string]interface{}{}
 					if err = json.NewDecoder(tr).Decode(&v); err != nil {
 						return
 					}
 					if i, ok := v["pubKey"]; ok {
-						l.bootstrapId = i.(string)
+						l.ids[n] = i.(string)
+						return l.ids[n], nil
 					}
-					fu.Verbose("bootstap node ID: %v", l.bootstrapId)
-					return
+					break
 				}
 			}
 		}
-
-		return errstr.New("failed to get bootstrap id")
 	}
-
-	return
+	return "", errstr.New("node did not create id.json file")
 }
 
 func (l *Localnet) waitForMinerJson() (err error) {
 	fu.Verbose("Waiting for bootstrap node json port")
 	for i:=0 ;; i++ {
 		c := japi.Remote{
-			Endpoint: fmt.Sprintf("%s:%d",l.MasterIP,l.Json),
+			Endpoint: fmt.Sprintf("%s:%d",l.SubnetPrefix+"1",l.Json),
 			Verbose: fu.Verbose }.New()
 		_, err := c.Echo("hello")
 		if err == nil {

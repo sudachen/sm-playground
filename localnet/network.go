@@ -24,8 +24,8 @@ func (l *Localnet) createNetwork() (err error) {
 			EnableIPv6: false,
 			IPAM: &network.IPAM{
 				Config: []network.IPAMConfig{{
-					Subnet: l.Subnet,
-					Gateway: l.Gateway,
+					Subnet: l.Subnet(),
+					Gateway: l.Gateway(),
 				}},
 			},
 		})

@@ -1,6 +1,6 @@
 module sudachen.xyz/pkg/localnet
 
-go 1.14
+go 1.16
 
 replace sudachen.xyz/pkg/errstr => ../virtual/errstr
 
@@ -21,7 +21,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
-	github.com/spacemeshos/go-spacemesh v0.1.12
+	github.com/spacemeshos/go-spacemesh v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.1.3
 	github.com/spf13/viper v1.7.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9

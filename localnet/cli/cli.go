@@ -28,7 +28,7 @@ func init() {
 	fu.VerboseOptP = mainCmd.PersistentFlags().BoolP("verbose", "v", false, "be verbose")
 	mainCmd.AddCommand(
 		cmdInfo,
-		cmdStart,
+		StartCommand(),
 		cmdStop,
 	)
 }
