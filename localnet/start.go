@@ -12,16 +12,21 @@ import (
 	"time"
 )
 
+func (l *Localnet) ConnectDocker() (err error) {
+	if l.docker == nil {
+		l.ctx = context.Background()
+		l.docker, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	}
+	return
+}
+
 // Start local network
 func (l *Localnet) Start() (err error) {
-
-	l.ctx = context.Background()
-	if l.docker, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation()); err != nil {
+	if err = l.ConnectDocker(); err != nil {
 		return
 	}
-
-	if ok, err := l.started(); ok {
-		return errstr.New("already started")
+	if ok, err := l.AlreadyStarted(); ok {
+		return errstr.New("already AlreadyStarted")
 	} else if err != nil {
 		return err
 	}
@@ -52,20 +57,22 @@ func (l *Localnet) Start() (err error) {
 	}
 
 	l.genesis = time.Now().Add(10 * time.Second)
+	l.MinerLabels["genesis"] = l.Genesis()
+	l.PoetLabels["genesis"] = l.Genesis()
 	if err = l.writeMinerConfig(); err != nil {
 		return
 	}
-	if err = l.startMiner(0); err != nil {
+	if err = l.startMiner(1); err != nil {
 		return
 	}
-	if err = l.waitForMinerJson(); err != nil { return }
+	if err = l.waitForMinerGrpc(l.SubnetPrefix+"1"); err != nil { return }
 	if err = l.startPoet(l.genesis); err != nil {
 		return
 	}
 	if err = l.activatePoet(); err != nil {
 		return
 	}
-	for i := 1; i < l.Count; i++ {
+	for i := 2; i <= l.Count; i++ {
 		if err = l.startMiner(i); err != nil {
 			return
 		}
@@ -119,5 +126,13 @@ loop:
 	return
 }
 
-
-
+func mixLabels(a, b map[string]string) map[string]string {
+	r := make(map[string]string,len(a)+len(b))
+	for k,v := range a {
+		r[k] = v
+	}
+	for k,v := range b {
+		r[k] = v
+	}
+	return r
+}

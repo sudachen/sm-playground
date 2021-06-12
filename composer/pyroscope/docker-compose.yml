@@ -1,0 +1,19 @@
+version: '2.2'
+services:
+  pyroscope:
+    container_name: "pyroscope"
+    restart: always
+    image: "pyroscope/pyroscope:latest"
+    ports:
+      - "4040:4040"
+    command: ["server"]
+    networks:
+      common:
+        ipv4_address: 192.168.69.110
+        aliases:
+          - "pyro"
+
+networks:
+  common:
+    external: true
+

@@ -10,3 +10,7 @@ func Verbose(f string, a ...interface{}) {
 		stdio.Printfln("# "+f, a...)
 	}
 }
+
+func Error(f string, a ...interface{}) {
+	stdio.Errorf("! "+f+"\n", a...)
+}

@@ -18,7 +18,7 @@ const PoetRole = "poet"
 const MinerRole = "miner"
 
 const NetworkID = 1
-const BootnodesCount = 1
+const BootnodesCount = 2
 
 // EnvDockerLabel is the environment variable name
 const EnvDockerLabel = "LOCALNET_LABEL"
@@ -48,7 +48,8 @@ const DefaultNetworkName = "spacemesh/localnet"
 // EnvDebug is the environment variable name
 const EnvDebug = "LOCALNET_DEBUG"
 // DefaultDebug defines default sets of services
-var DefaultDebug = []string{"poet", "post", "hare", "block-builder", "atx-builder", "block-oracle", "hare-oracle", "sync", "trtl", "meshDb"}
+//var DefaultDebug = []string{"poet", "post", "hare", "block-builder", "atx-builder", "block-oracle", "hare-oracle", "sync", "trtl", "meshDb"}
+var DefaultDebug = []string{"hare", "block-builder", "hare-oracle"}
 
 // EnvClientGrpc is the environment variable name
 const EnvClientGrpc = "LOCALNET_CLIENT_GRPC"
@@ -101,14 +102,20 @@ const EnvCoinbase = "LOCALNET_COINBASE"
 // DefaultCoinbase defines list of coinbase sparated by ':'. It's used by miners.
 var DefaultCoinbase = []string{"b8110cfeB1f01011E118BdB93F1Bb14D2052c276"}
 
+
+// EnvPyroPort is the environment variable name
+const EnvPyroPort = "LOCALNET_PYROPORT"
+// DefaultCoinbase defines list of coinbase sparated by ':'. It's used by miners.
+var DefaultPyroPort = "http://pyroscope:4040"
+
 const EnvDifficulty = "LOCALNET_DIFFICULTY"
 const DefaultDifficulty = 5
 const EnvMiningSpace = "LOCALNET_MINING_SPACE"
-const DefaultMiningSpace = PostUnitSize*128
+const DefaultMiningSpace = PostUnitSize*2
 const EnvLayersPerEpoch = "LOCALNET_LAYER_PER_EPOCH"
 const DefaultLayersPerEpoch = 3
 const EnvLayerDuration = "LOCALNET_LAYER_DURATION"
-const DefaultLayerDuration = 240 // sec  => 4 min
+const DefaultLayerDuration = 30 // sec  => 4 min
 const EnvHareLimit = "LOCALNET_HARE_LIMIT"
 const DefaultHareLimit = 2 // maximum full consensus runs
 const EnvCommite = "LOCALNET_COMMITE"
@@ -117,7 +124,7 @@ const EnvLeaders = "LOCALNET_LEADERS" // percent of nodes
 const DefaultLeaders = 3
 
 const P2pAlfa = 5
-const P2pRandCon = 4
+const P2pRandCon = 3
 const PostUnitSize = 1024
 
 func lookupInt(envVar string, dflt int) int {
@@ -161,6 +168,8 @@ type Localnet struct {
 	PullImages bool
 
 	Count int
+	CpuPerNode int
+	MemoryLimit int // Mb
 
 	Json, Grpc, P2p, Poet int
 	Services              []string
@@ -168,6 +177,7 @@ type Localnet struct {
 	MiningSpace    int
 	LayersPerEpoch int
 	LayerDuration  int
+	LayerSize      int
 	HareLimit      int
 	Difficulty     int
 	Commite        int
@@ -194,12 +204,15 @@ type Localnet struct {
 	Debug []string
 
 	genesis     time.Time
-	ids map[int]string
+	ids map[string]string
 
+	PyroPort   string
+	ReportPerf bool
+	Massif []int
 }
 
 func New() (l *Localnet) {
-	l = &Localnet{ids:map[int]string{}}
+	l = &Localnet{ids:map[string]string{}}
 
 	l.MinerImage = lookupString(EnvClientDockerImage,DefaultClientDockerImage)
 	l.PoetImage = lookupString(EnvClientPoetImage,DefaultPoetDockerImage)
@@ -249,7 +262,16 @@ func New() (l *Localnet) {
 	l.HareLimit = lookupInt(EnvHareLimit, DefaultHareLimit)
 	l.Commite = lookupInt(EnvCommite, DefaultCommite)
 
+	l.PyroPort = lookupString(EnvPyroPort, DefaultPyroPort)
 	return
+}
+
+func (l *Localnet) Genesis() string {
+	return l.genesis.Format("200601021504")
+}
+
+func (l *Localnet) GenesisTime() time.Time {
+	return l.genesis
 }
 
 func (l *Localnet) PoetIP() string {
@@ -272,7 +294,10 @@ func (l *Localnet) Leaders() int {
 	return  l.ExpLeaders * l.Commite / l.Count
 }
 
-func (l *Localnet) started() (ok bool,err error) {
+func (l *Localnet) AlreadyStarted() (ok bool,err error) {
+	if err = l.ConnectDocker(); err != nil {
+		return
+	}
 	containers, err := l.docker.ContainerList(l.ctx,
 		types.ContainerListOptions{
 			All: true,

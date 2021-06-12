@@ -46,5 +46,11 @@ require (
 	github.com/seehuhn/mt19937 v1.0.0
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c
 	github.com/sirupsen/logrus v1.7.0
+	github.com/google/uuid v1.1.2 // inderect
+	github.com/pyroscope-io/pyroscope v0.0.30 // inderect
+	github.com/fsnotify/fsnotify v1.4.9 // inderect
+	github.com/pelletier/go-toml v1.8.1 // inderect
+	github.com/mitchellh/go-ps v1.0.0 // inderect
+	golang.org/x/net v0.0.0-20200813134508-3edf25e44fcc //inderect
 )
 

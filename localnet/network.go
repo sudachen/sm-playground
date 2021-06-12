@@ -1,10 +1,10 @@
 package localnet
 
 import (
-	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
+	"sudachen.xyz/pkg/localnet/fu"
 )
 
 func (l *Localnet) createNetwork() (err error) {
@@ -39,11 +39,10 @@ func (l *Localnet) destroyNetwork() (err error) {
 			filters.Arg("name",l.NetworkName)),
 	})
 	for _, n := range networks {
-		fmt.Println(n)
-		fmt.Printf("removing network %v\n", n.Name)
+		fu.Verbose("removing network %v", n.Name)
 		err = l.docker.NetworkRemove(l.ctx,n.ID)
 		if err != nil {
-			fmt.Println("\t can't remove network: %v",err.Error())
+			fu.Error("\t can't remove network: %v",err.Error())
 			break
 		}
 	}

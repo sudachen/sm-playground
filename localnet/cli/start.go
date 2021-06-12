@@ -8,6 +8,7 @@ import (
 var instancesNumber int
 var layersPerEpoch int
 var layerDuration int
+var reportPerf bool
 
 func StartCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -25,6 +26,7 @@ func StartCommand() *cobra.Command {
 			if layersPerEpoch != 0 {
 				l.LayersPerEpoch = layersPerEpoch
 			}
+			l.ReportPerf = reportPerf
 			if err := l.Start(); err != nil {
 				panic(err)
 			}
@@ -33,5 +35,6 @@ func StartCommand() *cobra.Command {
 	cmd.Flags().IntVarP(&instancesNumber, "instances", "n", 0, "Count of instances to start")
 	cmd.Flags().IntVarP(&layersPerEpoch, "layers-per-epoch", "l", 0, "Layers per epoch")
 	cmd.Flags().IntVarP(&layerDuration, "layers-duration", "d", 0, "Layer duration in seconds")
+	cmd.Flags().BoolVarP(&reportPerf, "report-pscope", "r", false, "Report to PyroScope")
 	return cmd
 }

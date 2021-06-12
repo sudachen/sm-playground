@@ -1,0 +1,151 @@
+
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+
+filebeat:
+  autodiscover.providers:
+    - type: docker
+      cleanup_timeout: "180s"
+      templates:
+        - condition:
+            not.contains:
+                docker.container.labels.kind: elastic
+          config:
+          - type: log
+            scan_frequency: "2s"
+            paths:
+              #- /var/lib/docker/containers/*/${data.docker.container.id}-json.*
+              - /var/lib/docker/containers/${data.docker.container.id}/*-json.*
+            json.keys_under_root: false
+            json.message_key: "log"
+            json.ignore_decoding_error: true
+            json.add_error_key: true
+            multiline.pattern: '^$|^[[:space:]]+|^goroutine.*\:$|^created by |^[[:word:]][[:alnum:]_]+[./][[:word:]_]+[./(]|[[:alnum:]]*\.go\:[[:digit:]]+[[:space:]]\+0x[[:xdigit:]]+$'
+            multiline.negate: false
+            multiline.match: after
+            multiline.max_lines: 2000
+
+processors:
+  - decode_json_fields:
+      when:
+        equals:
+          json.stream: stdout
+      fields: ["json.log"]
+      target: "m"
+      process_array: false
+      max_depth: 1
+      add_error_key: true
+  - add_docker_metadata:
+      cleanup_timeout: 180
+  - copy_fields:
+      fields:
+        - from: "docker.container.labels.kind" 
+          to: "kind"
+        - from: "docker.container.labels.genesis"
+          to: "genesis"
+        - from: "container.image.name"
+          to: "image"
+        - from: "container.name"
+          to: "name"
+        - from: "json.stream"
+          to: "stream"
+      ignore_missing: true
+      fail_on_error: false
+  - drop_event:
+      when:
+        equals:
+          kind: elastic
+  - copy_fields:
+      fields:
+        - from: "json.time"
+          to: "@time"
+      ignore_missing: false
+      fail_on_error: true
+  - if:
+      equals:
+        stream: stdout
+    then:
+      - if:
+          or:
+            - equals:
+                kind: spacemesh
+            - equals:
+                kind: tweedlelite
+        then:
+          - rename:
+              fields:
+                - from: "m.M"
+                  to: "text"
+          #- script:
+          #    lang: javascript
+          #    source: >
+          #      function process(event) {
+          #         var v = event.Get("m.N")
+          #         if (v) {
+          #           event.Put("m.N",v.trim())
+          #         }
+          #      }
+        else:
+          - rename:
+              when:
+                has_fields: ["m.message"]
+              fields:
+               - from: "m.message"
+                 to: "text"
+          - rename:
+              when:
+                has_fields: ["m.@message"]
+              fields:
+               - from: "m.@message"
+                 to: "text"
+  - rename:
+      when:
+          not:
+            has_fields: ["text"]
+      fields:
+        - from: "json.log"
+          to: "text"
+      ignore_missing: true
+      fail_on_error: false
+  - drop_fields:
+      fields: ["m.@timestamp","m.timestamp","m.T"]
+      ignore_missing: true
+  #- truncate_fields:
+  #    fields: ["text"]
+  #    max_bytes: 32768
+  - include_fields:
+      fields: ["m","text","name","kind","image","stream","genesis","@time"]
+
+output.elasticsearch:
+  hosts: ["elastic:9200"]
+  protocol: http
+  workers: 6
+  index: "x-docker-%{+yyy.MM.dd}"
+  indices:
+    - index: "x-%{[kind]}-%{[genesis]}"
+      when:
+        has_fields: ["genesis"]
+    - index: "x-%{[kind]}-%{+yyy.MM.dd}"
+      when:
+        has_fields: ["kind"]
+  bulk_max_size: 32768
+
+queue.mem:
+  events: 393216
+  flush.min_events: 32768
+  flush.timeout: 1s
+
+setup.template.name: "x"
+setup.template.pattern: "x-*"
+setup.template.overwrite: false
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+
+setup.ilm.enabled: false
+
+logging.level:  info
+logging.to_files: false
+logging.to_stderr: true
+

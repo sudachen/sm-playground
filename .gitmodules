@@ -23,3 +23,9 @@
 [submodule "merkle-tree"]
 	path = virtual/poet/merkle-tree
 	url = git@github.com:spacemeshos/merkle-tree
+[submodule "cli-wallet"]
+	path = virtual/cli-wallet
+	url = git@github.com:spacemeshos/cli-wallet
+[submodule "leveldb"]
+	path = virtual/goleveldb
+	url = git@github.com:syndtr/goleveldb

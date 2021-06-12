@@ -1,0 +1,101 @@
+version: '2.2'
+services:
+
+  elastic:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.12.0
+    container_name: elastic
+    restart: always
+    environment:
+      - node.name=elastic
+      - node.master=true
+      - node.data=true
+      - cluster.name=docker
+      - index.codec=best_compression
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - logger.level=WARN
+      - "ES_JAVA_OPTS=-Xms4g -Xmx4g"
+      #- xpack.security.enabled=false
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elastic:/usr/share/elasticsearch/data
+    ports:
+      - 127.0.0.1:9200:9200
+    labels:
+      - "kind=elastic"
+    networks:
+      elastic:
+          aliases:
+              - "elastic" 
+      common:
+          ipv4_address: 192.168.69.101
+          aliases:
+              - "elastic"
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.12.0
+    container_name: kibana
+    restart: always
+    environment:
+      - SERVER_NAME=kibana
+      - ELASTICSEARCH_HOSTS=http://elastic:9200
+      - LOGGING_QUIET=true
+      - SERVER_PORT=80
+      - XPACK_SECURITY_ENABLED=false
+    depends_on:
+      - elastic
+    labels:
+      - "kind=elastic"
+    networks:
+      elastic:
+        aliases:
+          - "kibana"
+      common:
+        ipv4_address: 192.168.69.102
+        aliases:
+          - "kibana"
+    volumes:
+      - kibana:/usr/share/elasticsearch/data
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.12.0
+    container_name: filebeat
+    restart: always
+    user: root
+    environment:
+      - KIBANA_HOST=kibana:80
+      - ELASTICSEARCH_HOSTS=elastic
+    command: ["--strict.perms=false"]
+    depends_on:
+      - elastic
+      - kibana
+    networks:
+      - elastic
+    labels:
+      - "co.elastic.logs/enabled=false"
+      - "kind=elastic"
+    volumes:
+      - filebeat:/usr/share/filebeat/data
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers/:/var/lib/docker/containers/:ro
+      - /var/run/docker.sock:/var/run/docker.sock  
+      - /var/log/:/var/log/:ro
+      
+volumes:
+  elastic:
+    external: true
+  kibana:
+    external: true
+  filebeat:
+    driver: local
+
+networks:
+  elastic:
+     driver: bridge
+  common:
+     external: true
