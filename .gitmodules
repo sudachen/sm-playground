@@ -29,3 +29,9 @@
 [submodule "leveldb"]
 	path = virtual/goleveldb
 	url = git@github.com:syndtr/goleveldb
+[submodule "post"]
+	path = virtual/post
+	url = git@github.com:sudachen/post
+[submodule "gpu-post"]
+	path = virtual/gpu-post
+	url = git@github.com:sudachen/gpu-post

@@ -10,6 +10,10 @@ replace github.com/spacemeshos/api/release/go => ../virtual/api/release/go
 
 replace github.com/spacemeshos/ed25519 => ../virtual/ed25519
 
+replace github.com/spacemeshos/poet => ../virtual/poet
+
+replace github.com/spacemeshos/post => ../virtual/post
+
 require (
 	github.com/Microsoft/go-winio v0.4.16 // indirect
 	github.com/containerd/containerd v1.4.4 // indirect
@@ -27,9 +31,9 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
-	github.com/spacemeshos/api/release/go v0.0.0-20201210094223-105249951c66
-	github.com/spacemeshos/ed25519 v0.0.0-20200604074309-d72da3b5f487
-	github.com/spacemeshos/go-spacemesh v0.1.17
+	github.com/spacemeshos/api/release/go v0.0.0-00010101000000-000000000000
+	github.com/spacemeshos/ed25519 v0.0.0-00010101000000-000000000000
+	github.com/spacemeshos/go-spacemesh v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.1.3
 	golang.org/x/crypto v0.0.0-20201208171446-5f87f3452ae9
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974
