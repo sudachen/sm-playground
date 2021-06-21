@@ -1,4 +1,4 @@
-module sudachen.xyz/pkg/r0
+module sudachen.xyz/pkg/virtual
 
 go 1.16
 

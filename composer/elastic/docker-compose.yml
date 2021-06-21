@@ -32,7 +32,7 @@ services:
     networks:
       elastic:
           aliases:
-              - "elastic" 
+              - "elasticsearch"
       common:
           ipv4_address: 192.168.69.101
           aliases:
@@ -43,7 +43,7 @@ services:
     restart: always
     environment:
       - SERVER_NAME=kibana
-      - ELASTICSEARCH_HOSTS=http://elastic:9200
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - LOGGING_QUIET=true
       - SERVER_PORT=80
       - XPACK_SECURITY_ENABLED=false
@@ -51,6 +51,8 @@ services:
       - elastic
     labels:
       - "kind=elastic"
+    ports:
+      - 127.0.0.1:5601:80
     networks:
       elastic:
         aliases:
