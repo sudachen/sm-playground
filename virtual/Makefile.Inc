@@ -1,17 +1,23 @@
-LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=_ -X main.branch=_"
-BIN_DIR := build
-PROJ_DIR := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
-export CGO_LDFLAGS := -L$(PROJ_DIR)build -Wl,-rpath,\$$ORIGIN $(CGO_LDFLAGS)
+PROJ_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
+BIN_DIR ?= $(PROJ_DIR)build/
+export CGO_LDFLAGS := -L$(BIN_DIR) -Wl,-rpath,\$$ORIGIN $(CGO_LDFLAGS)
+export GOOS GOARCH GOARM BIN_DIR
 
-$(info "OS=$(OS)")
 ifeq ($(OS),Windows_NT)
+  HOST_OS := windows
+else
+  HOST_OS := $(shell uname | tr [A-Z] [a-z])
+endif
+
+GOOS ?= $(HOST_OS)
+
+ifeq ($(GOOS),windows)
   platform := windows
-  export PATH := $(PATH):$(PROJ_DIR)/build
+  export PATH := $(PATH):$(PROJ_DIR)build
   EXE := .exe
 else
-  OS := $(shell uname)
-  $(info "uname OS=$(OS)")
-  ifeq ($(OS),Darwin)
+  TEMP := /tmp
+  ifeq ($(GOOS),darwin)
 	  platform := macos
   else
       platform := linux
@@ -31,15 +37,15 @@ else
   endif
 endif
 
-BINDIR_GPU_SETUP_LIBS = $(foreach X,$(GPU_SETUP_LIBS),$(BIN_DIR)/$(X))
-$(BINDIR_GPU_SETUP_LIBS):
+BINDIR_GPU_SETUP_LIBS = $(foreach X,$(GPU_SETUP_LIBS),$(BIN_DIR)$(X))
+$(BINDIR_GPU_SETUP_LIBS): $(PROJ_DIR)$(GPU_SETUP_ZIP)
 	mkdir -p $(dir $@)
-	cd $(dir $@) && unzip $(GPU_SETUP_ZIP) $(notdir $@)
-$(BIN_DIR)/$(GPU_SETUP_ZIP):
+	unzip -o $(PROJ_DIR)$(GPU_SETUP_ZIP) -d $(dir $@) $(notdir $@)
+	touch $@
+$(PROJ_DIR)$(GPU_SETUP_ZIP):
+	curl -L $(GPU_SETUP_URL_ZIP) -o $(PROJ_DIR)$(GPU_SETUP_ZIP)
+$(BIN_DIR)$(BINARY):
 	mkdir -p $(dir $@)
-	curl -L $(GPU_SETUP_URL_ZIP) -o $(BIN_DIR)/$(GPU_SETUP_ZIP)
-$(BIN_DIR)/$(BINARY):
-	mkdir -p $(dir $@)
-	go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
+	go build ${LDFLAGS} -o $(BIN_DIR)$(BINARY)
 
-get-gpu-setup: $(BIN_DIR)/$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
+get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)

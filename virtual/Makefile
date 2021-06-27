@@ -1,8 +1,10 @@
 export VERSION = localnet
+LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=_ -X main.branch=_"
 BINARY := go-spacemesh$(EXE)
+
 include Makefile.Inc
 
-build-miner: clean get-gpu-setup $(BIN_DIR)/$(BINARY)
+build-miner: clean get-gpu-setup $(BIN_DIR)$(BINARY)
 
 build/Test.Dockerfile: $(foreach X,Linux Golang Builder Test,docker/$(X).Dockerfile)
 	mkdir -p $(dir $@)
