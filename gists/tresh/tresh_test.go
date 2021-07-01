@@ -1,8 +1,10 @@
 package tresh
 
 import (
+	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/fixed"
 	"math"
+	"math/big"
 	"math/rand"
 	"testing"
 )
@@ -17,18 +19,30 @@ func tFixed(k,q,W int) fixed.Fixed {
 	return fixed.One.Sub(fixed.Exp(p.Mul(fixed.Ln2Value)))
 }
 
+func tBigfloat(k,q,W int) float64 {
+	x := big.NewFloat(-(float64(k)/(float64(W)*(1-float64(q)))))
+	f, _ := bigfloat.Pow(big.NewFloat(2.0), x).Float64()
+	return 1 - f
+}
+
 func Test1(t *testing.T) {
 
 	const epsilon = 1e-12
+	const epsilon2 = 1e-16 // use 1e-15 to pass test
 
 	for k := 1; k < 100; k++ {
 		for q := 2; q < 100; q++ {
 			W := rand.Int()
 			a := tFloat64(k,q,W)
 			b := tFixed(k,q,W)
+			c := tBigfloat(k,q,W)
 			d := math.Abs(b.Float() - a)
 			if d > epsilon {
 				t.Fatalf("abs(%v - %v) = %v > %v", a,b.Float(), d, epsilon)
+			}
+			d2 := math.Abs(b.Float() - c)
+			if d2 > epsilon2 {
+				t.Errorf("abs(%v - %v) = %v > %v", c,b.Float(), d2, epsilon2)
 			}
 		}
 	}
