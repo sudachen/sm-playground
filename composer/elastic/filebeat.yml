@@ -118,7 +118,7 @@ processors:
       fields: ["m","text","name","kind","image","stream","genesis","@time"]
 
 output.elasticsearch:
-  hosts: ["elasticsearch:9200"]
+  hosts: ["elastic:9200"]
   protocol: http
   workers: 6
   index: "x-docker-%{+yyy.MM.dd}"

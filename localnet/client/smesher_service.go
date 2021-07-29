@@ -30,14 +30,14 @@ func (c *gRPCClient) IsSmeshing() (bool, error) {
 }
 
 // GetPostStatus returns the current node proof of space status
-func (c *gRPCClient) GetPostStatus() (*apitypes.PostStatus, error) {
-	s := c.getSmesherServiceClient()
-	if resp, err := s.PostStatus(context.Background(), &empty.Empty{}); err != nil {
-		return nil, err
-	} else {
-		return resp.Status, nil
-	}
-}
+//func (c *gRPCClient) GetPostStatus() (*apitypes.PostStatus, error) {
+///	s := c.getSmesherServiceClient()
+//	if resp, err := s.PostStatus(context.Background(), &empty.Empty{}); err != nil {
+//		return nil, err
+//	} else {
+//		return resp.Status, nil
+//	}
+//}
 
 // StopSmeshing instructs the node to stop smeshing and optionally delete smeshing data file(s)
 func (c *gRPCClient) StopSmeshing(deleteFiles bool) (*status.Status, error) {

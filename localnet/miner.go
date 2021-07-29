@@ -36,15 +36,20 @@ func (l *Localnet) writeMinerConfig() (err error) {
 	main["layers-per-epoch"] = l.LayersPerEpoch
 	main["layer-duration-sec"] = l.LayerDuration
 	main["layer-average-size"] = fu.Fnzi(l.LayerSize,l.Count*8/10)
-	main["coinbase"] = strings.Join(l.Coinbase,",")
 	main["genesis-time"] = l.genesis.Format(time.RFC3339)
-	main["genesis-total-weight"] = l.Count*l.MiningSpace
-	main["space-to-commit"] = l.MiningSpace
 	main["hdist"] = fu.Mini(fu.Maxi(l.LayersPerEpoch/2,10),l.LayersPerEpoch*2-1)
 	main["poet-server"] = fmt.Sprintf("%s:%d",l.PoetIP(),l.Poet)
-	main["start-mining"] = true
 	main["sync-interval"] = fu.Maxi(tick*2/3,2)
 	main["sync-validation-delta"] = tick*2
+
+	// removed
+	// main["genesis-total-weight"] = l.Count*l.MiningSpace
+
+	if l.Revision() < Rev_0_2 {
+		main["start-mining"] = true
+		main["space-to-commit"] = l.MiningSpace
+		main["coinbase"] = strings.Join(l.Coinbase,",")
+	}
 
 	cfg["main"] = main
 
@@ -65,15 +70,17 @@ func (l *Localnet) writeMinerConfig() (err error) {
 	cfg["hare-eligibility"] = elig
 
 	swarm := make(map[string]interface{})
-	swarm["randcon"] = P2pRandCon
+	randCon := fu.Fnzi(l.P2pRandCon,P2pRandCon)
+	swarm["randcon"] = randCon
 	swarm["alpha"] = P2pAlfa
-	swarm["bucketsize"] = P2pRandCon*2
+	swarm["bucketsize"] = randCon*2
 
 	p2p := make(map[string]interface{})
 	p2p["swarm"] = swarm
 	p2p["network-id"] = NetworkID
 	p2p["acquire-port"] = false
 	p2p["tcp-port"] = l.P2p
+	p2p["max-inbound"] = l.Count
 	cfg["p2p"] = p2p
 
 	api := make(map[string]interface{})
@@ -84,9 +91,46 @@ func (l *Localnet) writeMinerConfig() (err error) {
 	cfg["api"] = api
 
 	post := make(map[string]interface{})
-	post["post-space"] = PostUnitSize
 	post["post-difficulty"] = l.Difficulty
+	if l.Revision() <= Rev_0_1 {
+		post["post-space"] = PostUnitSize
+	} else {
+		post["post-bits-per-label"] = 8
+		post["post-labels-per-unit"] = 1024
+		post["post-min-numunits"] = 2
+		post["post-max-numunits"] = 4
+		post["post-k1"] = 2000
+		post["post-k2"] = 1800
+	}
 	cfg["post"] = post
+
+	if l.Revision() >= Rev_0_2 {
+		smeshing := make(map[string]interface{})
+		smeshing["smeshing-start"] = true
+		smeshing["smeshing-coinbase"] = strings.Join(l.Coinbase,",")
+		smeshingOpts := make(map[string]interface{})
+		smeshingOpts["smeshing-opts-datadir"] = "/Users/x/dev/postdata"
+		smeshingOpts["smeshing-opts-numunits"] = 2
+		smeshingOpts["smeshing-opts-numfiles"] = 1
+		smeshingOpts["smeshing-opts-throttle"] = true
+		smeshing["smeshing-opts"] = smeshingOpts
+		// use default autoselected provider
+		// smeshingOpts["smeshing-opts-provider"] = 0
+		cfg["smeshing"] = smeshing
+	}
+
+	beacon := make(map[string]interface{})
+	beacon["tortoise-beacon-q"] = "1/3"
+	beacon["tortoise-beacon-rounds-number"] = 3
+	beacon["tortoise-beacon-grace-period-duration-ms"] = 1000
+	beacon["tortoise-beacon-proposal-duration-ms"] = l.LayerDuration/4*1000
+	beacon["tortoise-beacon-first-voting-round-duration-ms"] = l.LayerDuration/4*1000
+	beacon["tortoise-beacon-voting-round-duration-ms"] = 2000
+	beacon["tortoise-beacon-weak-coin-round-duration-ms"] = 2000
+	beacon["tortoise-beacon-wait-after-epoch-start-ms"] = 1000
+	beacon["tortoise-beacon-theta"] = "0.00004"
+	beacon["tortoise-beacon-votes-limit"] = l.Count*2
+	cfg["tortoise-beacon"] = beacon
 
 	logx := make(map[string]interface{})
 	for _, x := range l.Debug {
@@ -128,7 +172,7 @@ func (l *Localnet) startMiner(i int) (err error) {
 			id string
 			nodes []string
 		)
-		for j := 1; j < i && j < bnCount; j++ {
+		for j := 1; j < i && j <= bnCount; j++ {
 			if id, err = l.getIdFor(fmt.Sprintf("spacemesh_miner_%d",j)); err != nil {
 				fu.Error(err.Error())
 				return
@@ -178,7 +222,7 @@ func (l *Localnet) startMiner(i int) (err error) {
 
 	body, err := l.docker.ContainerCreate(l.ctx,
 		&container.Config{
-			Image: l.MinerImage,
+			Image: l.VersionedMinerImage(),
 			Labels: mixLabels(l.MinerLabels, map[string]string{
 				"number" : fmt.Sprint(i),
 			}),

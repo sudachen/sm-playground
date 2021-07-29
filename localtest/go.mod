@@ -17,7 +17,6 @@ replace github.com/spacemeshos/poet => ../virtual/poet
 replace github.com/spacemeshos/post => ../virtual/post
 
 require (
-	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/olivere/elastic/v7 v7.0.24
 	github.com/spacemeshos/ed25519 v0.0.0-20200604074309-d72da3b5f487
 	github.com/spacemeshos/go-spacemesh v0.1.17

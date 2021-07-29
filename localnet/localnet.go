@@ -18,7 +18,7 @@ const PoetRole = "poet"
 const MinerRole = "miner"
 
 const NetworkID = 1
-const BootnodesCount = 2
+const BootnodesCount = 1
 
 // EnvDockerLabel is the environment variable name
 const EnvDockerLabel = "LOCALNET_LABEL"
@@ -28,12 +28,12 @@ const DefaultDockerLabel = "spacemesh/localnet"
 // EnvClientDockerImage is the environment variable name
 const EnvClientDockerImage = "LOCALNET_CLIENT_IMAGE"
 // DefaultClientDockerImage is the default docker image to run as client
-const DefaultClientDockerImage = "local/go-spacemesh:latest"
+const DefaultClientDockerImage = "local/go-spacemesh"
 
 // EnvClientPoetImage is the environment variable name
 const EnvClientPoetImage = "LOCALNET_POET_IMAGE"
 // DefaultPoetDockerImage is the default docker image to run as poet server
-const DefaultPoetDockerImage = "local/poet:latest"
+const DefaultPoetDockerImage = "local/poet"
 
 // EnvNodesCount is the environment variable name
 const EnvNodesCount = "LOCALNET_NODES_COUNT"
@@ -124,8 +124,26 @@ const EnvLeaders = "LOCALNET_LEADERS" // percent of nodes
 const DefaultLeaders = 3
 
 const P2pAlfa = 5
-const P2pRandCon = 3
+const P2pRandCon = 2
 const PostUnitSize = 1024
+
+type Revision int
+const (
+	DefultRevision Revision = 0
+	Rev_0_1 Revision = 1
+	Rev_0_2 Revision = 2
+	Latest Revision = Rev_0_2
+)
+
+func (r Revision) String() string {
+	switch r {
+	case DefultRevision: return Latest.String()
+	case Rev_0_1: return "0.1"
+	case Rev_0_2: return "0.2"
+	default:
+		panic("unknown revision")
+	}
+}
 
 func lookupInt(envVar string, dflt int) int {
 	if v, ok := os.LookupEnv(envVar); ok {
@@ -163,6 +181,8 @@ func lookupStringArray(envVar string, dflt []string) []string {
 }
 
 type Localnet struct {
+	Rev Revision
+
 	MinerImage string
 	PoetImage  string
 	PullImages bool
@@ -209,6 +229,8 @@ type Localnet struct {
 	PyroPort   string
 	ReportPerf bool
 	Massif []int
+
+	P2pRandCon int
 }
 
 func New() (l *Localnet) {
@@ -264,6 +286,17 @@ func New() (l *Localnet) {
 
 	l.PyroPort = lookupString(EnvPyroPort, DefaultPyroPort)
 	return
+}
+
+func (l *Localnet) Revision() Revision {
+	if l.Rev == DefultRevision {
+		return Latest
+	}
+	return l.Rev
+}
+
+func (l *Localnet)  VersionedMinerImage() string {
+	return l.MinerImage + ":" + l.Revision().String()
 }
 
 func (l *Localnet) Genesis() string {

@@ -35,3 +35,9 @@
 [submodule "gpu-post"]
 	path = virtual/gpu-post
 	url = git@github.com:sudachen/gpu-post
+[submodule "go-svm"]
+	path = virtual/go-svm
+	url = git@github.com:spacemeshos/go-svm
+[submodule "svm"]
+	path = virtual/svm
+	url = git@github.com:sudachen/svm

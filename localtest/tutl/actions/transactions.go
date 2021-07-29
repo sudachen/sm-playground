@@ -24,20 +24,26 @@ func Transactions(l *tutl.Localnet, seed int) {
 
 	fu.Verbose("sequential transfer from tap to new accounts")
 
+	wg := sync.WaitGroup{}
 	acc := make([]tutl.Account, NewAccountsCount)
+	xid := make([][]byte, NewAccountsCount)
 	for i := range acc {
 		acc[i] = tutl.GenSk()
-		xid := bk.SendCoins(TapSk, acc[i], Amount1, Fee, tracker)
-		bk.WaitFor(xid)
+		xid[i] = bk.SendCoins(TapSk, acc[i], Amount1, Fee, tracker)
+		bk.WaitFor(xid[i])
 	}
 
-	time.Sleep(2*time.Duration(l.LayerDuration)*time.Second)
+	for _, x := range xid {
+		fu.Verbose("wait for transaction %x", x)
+		bk.WaitFor(x, 2)
+	}
+
 	fu.Verbose("validating...")
 	tracker.Validate(bk)
 
 	fu.Verbose("parallel transfer from created accounts to new accounts")
 
-	wg := sync.WaitGroup{}
+	wg = sync.WaitGroup{}
 	acc2 := make([]tutl.Account, NewAccountsCount)
 	for i := range acc {
 		acc2[i] = tutl.GenSk()

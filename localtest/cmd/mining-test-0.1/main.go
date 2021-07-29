@@ -6,5 +6,5 @@ import (
 )
 
 func main() {
-	body.DoIt(localnet.Latest)
+	body.DoIt(localnet.Rev_0_1)
 }

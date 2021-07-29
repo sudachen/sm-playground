@@ -11,7 +11,8 @@ RUN set -ex \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /go/src/github.com/spacemeshos/build/go-spacemesh /bin/
-COPY --from=build /go/src/github.com/spacemeshos/build/libgpu-setup.so /bin/
+ARG REV=.
+COPY --from=build /go/src/github.com/spacemeshos/$REV/build/go-spacemesh /bin/
+COPY --from=build /go/src/github.com/spacemeshos/$REV/build/libgpu-setup.so /bin/
 RUN mkdir /massif
 ENTRYPOINT ["/bin/go-spacemesh"]

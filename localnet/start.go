@@ -76,6 +76,7 @@ func (l *Localnet) Start() (err error) {
 		if err = l.startMiner(i); err != nil {
 			return
 		}
+		//time.Sleep(2*time.Second)
 	}
 	return
 }

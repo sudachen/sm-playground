@@ -61,7 +61,7 @@ func (l *Localnet) WaitForLayer(layer int64, timeout time.Duration, count ...int
 
 	for {
 		r = queries.GetTickMsgs(l.Genesis(), layer);
-		if len(r) == fu.Fnzi(fu.Fnzi(count...),l.Count) {
+		if len(r) >= fu.Fnzi(fu.Fnzi(count...),l.Count) {
 			return
 		}
 		select {
@@ -80,7 +80,7 @@ func (l *Localnet) GetLastLayer() int64 {
 func (l *Localnet) WaitForGenesis() []queries.Row {
 	timeout := l.GenesisTime().Sub(time.Now()) +
 		time.Duration(l.AfterGenesisLayer() + 1) * time.Duration(l.LayerDuration) * time.Second
-	return l.WaitForLayer(l.AfterGenesisLayer(), timeout)
+	return l.WaitForLayer(l.AfterGenesisLayer()+1, timeout, l.Count/2)
 }
 
 func (l *Localnet) AfterGenesisLayer() int64 {
@@ -156,6 +156,26 @@ func (b Backend) SendCoins(from, to Account, amount, fee uint64, tracker *Accoun
 			}
 			panic(errstr.Wrapf(0, err, "failed to transfer[%s] %s -> %s: %v", b.Name, from.Address().Hex(), to.Address().Hex(), err.Error()))
 		}
+		if r, _, err := b.TransactionState(st.Id.Id, true); err != nil {
+			panic(errstr.Wrapf(0, err, "failed to query transaction[%s]: %s -> %s: %v", b.Name, from.Address().Hex(), to.Address().Hex(), err.Error()))
+		} else {
+			if r.State.String() == "TRANSACTION_STATE_UNSPECIFIED" {
+				i := 0
+				for ; i < 5; i++ {
+					time.Sleep(time.Second)
+					if r, _, err := b.TransactionState(st.Id.Id, true); err != nil {
+						panic(errstr.Wrapf(0, err, "failed to query transaction[%s]: %s -> %s: %v", b.Name, from.Address().Hex(), to.Address().Hex(), err.Error()))
+					} else {
+						fu.Verbose(r.State.String())
+						if r.State.String() != "TRANSACTION_STATE_UNSPECIFIED" {
+							break
+						}
+						fu.Error("missed transaction[%s]: <%x> %s -> %s", b.Name, st.Id.Id, from.Address().Hex(), to.Address().Hex())
+					}
+				}
+				if i >= 5 { continue }
+			}
+		}
 		tracker.Transfer(from, to, amount, fee)
 		return st.Id.Id
 	}
@@ -175,16 +195,16 @@ loop:
 		} else {
 			switch r.State.String() {
 			case "TRANSACTION_STATE_PROCESSED":
-				//fu.Verbose("TX => %s: %v", b.Name, r.State.String())
+				fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 				break loop
 			case "TRANSACTION_STATE_MESH":
 				if s < 2 {
-					//fu.Verbose("TX => %s: %v", b.Name, r.State.String())
+					fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 					break loop
 				}
 			case "TRANSACTION_STATE_MEMPOOL":
 				if s == 0 {
-					//fu.Verbose("TX => %s: %v", b.Name, r.State.String())
+					fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 					break loop
 				}
 			case "TRANSACTION_STATE_UNSPECIFIED":
@@ -212,31 +232,33 @@ func (bk Backends) WaitFor(txid []byte, strict ...int) {
 				} else {
 					switch r.State.String() {
 					case "TRANSACTION_STATE_PROCESSED":
-						//fu.Verbose("TX => %s: %v", b.Name, r.State.String())
+						fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 						ok[i] = true
 					case "TRANSACTION_STATE_MESH":
+						fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 						if s < 2 {
-							//fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 							ok[i] = true
  						} else {
  							repeat = true
 						}
 					case "TRANSACTION_STATE_MEMPOOL":
+						fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 						if s == 0 {
-							//fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 							ok[i] = true
 						} else {
 							repeat = true
 						}
 					case "TRANSACTION_STATE_UNSPECIFIED":
+						fu.Verbose("TX => %s: %v", b.Name, r.State.String())
 						repeat = true
 					default:
-						fu.Error("TX => %s: %v", b.Name, r.State.String())
+						fu.Error("x:TX => %s: %v", b.Name, r.State.String())
 						return
 					}
 				}
 			}
 		}
 	}
+	fu.Verbose("all backends are completed transaction %x", txid)
 }
 
